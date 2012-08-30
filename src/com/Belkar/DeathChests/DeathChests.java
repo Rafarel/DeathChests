@@ -61,8 +61,9 @@ public class DeathChests extends JavaPlugin {
 		if (!this.getDataFolder().exists()) {
 			this.getDataFolder().mkdirs();
 		}
-		final String defaultConf = getDataFolder() + File.separator + "config.yml";
+		deathChests = new LinkedList<>();
 		
+		final String defaultConf = getDataFolder() + File.separator + "config.yml";
 		this.getServer().getScheduler().scheduleAsyncDelayedTask(this, new Runnable() {
 			
 			@Override
