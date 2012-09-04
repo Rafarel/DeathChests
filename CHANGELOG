@@ -21,3 +21,8 @@ Version 1.2
 	Fixed Players not allowed to open/break their own chests
 	Added the /dc compass command to set your compass target to your FIRST deathchest.
 	Added the possibility to store your XP in the DeathChest. (global config + Permission)
+	
+Version 1.2.1
+	Fixed database creation on first startup
+	Added Metrics from Hidendra
+	Added "fully vanish function"

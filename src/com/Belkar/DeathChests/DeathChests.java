@@ -1,6 +1,7 @@
 package com.Belkar.DeathChests;
 
 import java.io.File;
+import java.io.IOException;
 import java.security.InvalidParameterException;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -21,6 +22,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
+import org.mcstats.Metrics;
 
 public class DeathChests extends JavaPlugin {
 	// Where the chests get saved
@@ -40,6 +42,7 @@ public class DeathChests extends JavaPlugin {
 
 	// The Task ID of the autosaver (not really needed but for safety)
 	private int autosaveTaskId = -1;
+	private static Metrics metrics;
 
 //	private List<Player> compassData;
 	
@@ -61,7 +64,6 @@ public class DeathChests extends JavaPlugin {
 		if (!this.getDataFolder().exists()) {
 			this.getDataFolder().mkdirs();
 		}
-		deathChests = new LinkedList<>();
 		
 		final String defaultConf = getDataFolder() + File.separator + "config.yml";
 		this.getServer().getScheduler().scheduleAsyncDelayedTask(this, new Runnable() {
@@ -80,6 +82,12 @@ public class DeathChests extends JavaPlugin {
 		listener = new DeathChestEventListener(this);
 		
 //		this.compassData = new LinkedList<>();
+		try {
+		    metrics = new Metrics(this);
+		    metrics.start();
+		} catch (IOException e) {
+		    // Failed to submit the stats :-(
+		}
 		
 		super.onEnable();
 		getLogger().info(this.getDescription().getFullName() + "enabled successfully!");
@@ -99,19 +107,19 @@ public class DeathChests extends JavaPlugin {
 
 		// Readout all the chests from the filesystem
 		String chestsPath = getDataFolder() + File.separator + CHEST_FILE;
+		boolean loaded = false;
 		if (deathChests != null) {
 			saveChests(chestsPath);
 		} else {
 			File chestsFile = new File(chestsPath);
-			boolean loaded = false;
 			if (chestsFile.exists()) {
-				deathChests = Utils.loadTombstone(chestsPath);
+				deathChests = Utils.loadTombstone(chestsPath, this);
 //				deathChests = Utils.load(chestsPath);
 				loaded = true;
 			}
-			if (!loaded) {
-				deathChests = new LinkedList<>();
-			}
+		}
+		if (!loaded) {
+			deathChests = new LinkedList<>();
 		}
 		
 		// Start the autosaver task
@@ -300,7 +308,7 @@ public class DeathChests extends JavaPlugin {
 		}
 		
 		// Add the newly created DeathChest to the collection
-		Tombstone stone = new Tombstone(owner, owner.getWorld().getName(), chestPos, chest2Pos, signPosition, xp);
+		Tombstone stone = new Tombstone(owner, owner.getWorld().getName(), chestPos, chest2Pos, signPosition, xp, this);
 		if (free) {
 			stone.setDropChests();
 		}
@@ -547,38 +555,51 @@ public class DeathChests extends JavaPlugin {
 	 * @param stone The chest that gets picked up
 	 */
 	public void playerPickupTombstone(Player player, Tombstone stone) {
-		if (player == null || stone == null)
+		if (stone == null)
 			throw new NullPointerException();
-		
-		// Put the contents of the chests into the players inventory
+
+		// Get the Content of the chest
 		Inventory chest = stone.getInventory();
 		ItemStack[] chestInventory = Utils.compressInventorArray(chest.getContents());
-		if (chestInventory.length > 0) {
-			Collection<ItemStack> left = player.getInventory().addItem(chestInventory).values();
-			chest.clear();
-			// If the don't fit, put them back into the chest
-			if (left.size() > 0) {
-				chest.addItem(Utils.collectionToArray(left));
+		
+		World world = this.getServer().getWorld(stone.getWorld());
+		
+		if (player == null) {
+			// Chest vanish
+			for (ItemStack item : chestInventory) {
+				world.dropItemNaturally(stone.getChestLoc(world).add(0.5, 1.5, 0.5), item);
 			}
-		}
-		
-		// Give the player its XP back
-		if (stone.getXp() > 0) {
-			new ExperienceManager(player).changeExp(stone.getXp());
-		}
-		
-		// If the Chests are empty, put them into the players inventory or drop them on the ground.
-		if (Utils.getStacks(chest) <= 0) {
-			if (!stone.isDropped()) {
-				List<ItemStack> additionalItems = new LinkedList<>(player.getInventory().addItem(stone.getChests()).values());
-				if (additionalItems.size() > 0) {
-					player.getWorld().dropItem(player.getLocation(), additionalItems.get(0));
+			chest.clear();
+			removeChest(stone);
+		} else {
+			// Put the contents of the chests into the players inventory		
+			if (chestInventory.length > 0) {
+				Collection<ItemStack> left = player.getInventory().addItem(chestInventory).values();
+				chest.clear();
+				// If the don't fit, put them back into the chest
+				if (left.size() > 0) {
+					chest.addItem(Utils.collectionToArray(left));
 				}
-				stone.setDropChests();
 			}
 			
-			// Remove the chests from the world and the DeathChest-Container
-			removeChest(stone);
+			// Give the player its XP back
+			if (stone.getXp() > 0) {
+				new ExperienceManager(player).changeExp(stone.getXp());
+			}
+			
+			// If the Chests are empty, put them into the players inventory or drop them on the ground.
+			if (Utils.getStacks(chest) <= 0) {
+				if (!stone.isDropped()) {
+					List<ItemStack> additionalItems = new LinkedList<>(player.getInventory().addItem(stone.getChests()).values());
+					if (additionalItems.size() > 0) {
+						world.dropItem(player.getLocation(), additionalItems.get(0));
+					}
+					stone.setDropChests();
+				}
+				
+				// Remove the chests from the world and the DeathChest-Container
+				removeChest(stone);
+			}
 		}
 	}
 }

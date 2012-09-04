@@ -28,6 +28,10 @@ public class Settings {
 	/**The time in seconds between emptying the chest and finally picking it up/putting it into the inventory
 	 */
 	public static long EMPTY_TIMEOUT = 0;
+	
+	/**The time in seconds after a chest fully vanishes (after loosing the lock) if it is 0, it is deactivated!
+	 */
+	public static int FULL_VANISH_TIME;
 
 	private static String pluginName;
 
@@ -47,6 +51,7 @@ public class Settings {
 		EMPTY_TIMEOUT = config.getInt("general.emptyTimeout");
 		SAVE_EXP = config.getBoolean("general.saveXP");
 		SAVE_EXP_RATION = (float) config.getDouble("general.saveXPRatio");
+		FULL_VANISH_TIME = config.getInt("general.fullVanish");
 	}
 
 	/**Write down the configs
@@ -59,6 +64,7 @@ public class Settings {
 		config.set("general.emptyTimeout", EMPTY_TIMEOUT);
 		config.set("general.saveXP", SAVE_EXP);
 		config.set("general.saveXPRatio", SAVE_EXP_RATION);
+		config.set("general.fullVanish", FULL_VANISH_TIME);
 		
 //		try {
 //			config.save(config.getCurrentPath());

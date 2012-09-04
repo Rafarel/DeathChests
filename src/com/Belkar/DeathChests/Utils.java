@@ -261,7 +261,7 @@ public class Utils {
 		return false;
 	}
 
-	public static List<Tombstone> loadTombstone(String chestsPath) {
+	public static List<Tombstone> loadTombstone(String chestsPath, DeathChests plugin) {
 		LinkedList<Tombstone> deathChests = new LinkedList<>(); 
 		try {
 			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -286,7 +286,7 @@ public class Utils {
 		        	Node node = list.item(i);
 		        	String name = node.getNodeName(); 
 		        	if (name.equalsIgnoreCase(Utils.DEATHCHEST_XML_TAG)) {
-		        		deathChests.add(new Tombstone((Element)node, timestamp));
+		        		deathChests.add(new Tombstone((Element)node, timestamp, plugin));
 		        	}
 	        	} catch (XMLParseException ex) {
 	        		System.err.println("Corrupted deathchest! Skipping this one!");

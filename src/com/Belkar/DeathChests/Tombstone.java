@@ -24,71 +24,117 @@ public class Tombstone {
 	private int[] chest2Position;
 	private int[] signPosition;
 	private boolean alreadyDroppedChests = false;
+	
 	private long timestamp = -1;
+	private boolean locked = true;
+	private int lockTimeout = -1;
 	
 	private int savedXp = 0;
 	
-	public Tombstone(Player owner, String world, Vector chestPos, Vector chest2Pos, Vector signPos, int xp) {
+	private DeathChests parent = null;
+	
+	public Tombstone(Player owner, String world, Vector chestPos, Vector chest2Pos, Vector signPos, int xp, DeathChests plugin) {
+		this.parent = plugin;
+		
 //		this.owner = owner.getName();
 		this.owner = owner;
 		this.worldName = world; 
 		this.chestPosition = Utils.toArray(chestPos);
 		this.chest2Position = Utils.toArray(chest2Pos);
 		this.signPosition = Utils.toArray(signPos);
+		this.locked = true;
 		
 		this.savedXp = xp;
 		
 		if (!owner.hasPermission("deathchest.use.noTimeout")) {
 			this.timestamp = System.currentTimeMillis();
+			startTimeout(Settings.TIMEOUT);
 		}
 	}
 
-	public Tombstone(Element node, long currentTimestamp) throws XMLParseException {
-		this.owner = Utils.getPlayer(node.getAttribute("owner"));
-		if (!owner.hasPermission("deathchest.use.noTimeout")) {
-			this.timestamp = currentTimestamp - Long.parseLong(node.getAttribute("existingTime"));
-		}
-		this.savedXp = Integer.getInteger(node.getAttribute("xp"));
-		this.alreadyDroppedChests = Boolean.getBoolean(node.getAttribute("dropped"));
-		
-		Element positionsNode = (Element) node.getElementsByTagName("positions").item(0);
-		{
-			this.worldName = positionsNode.getAttribute("world");
-			int x, y, z;
-			{
-				Element chestPos = (Element) positionsNode.getElementsByTagName("chestPos").item(0);
-				x = Integer.parseInt(chestPos.getAttribute("x"));
-				y = Integer.parseInt(chestPos.getAttribute("y"));
-				z = Integer.parseInt(chestPos.getAttribute("z"));
-				
-				this.chestPosition = new int[] { x, y, z };
-			}
-			{
-				NodeList list = positionsNode.getElementsByTagName("chest2Pos");
-				if (list.getLength() > 0) {
-					Element chest2Pos = (Element) list.item(0);
-					x = Integer.parseInt(chest2Pos.getAttribute("x"));
-					y = Integer.parseInt(chest2Pos.getAttribute("y"));
-					z = Integer.parseInt(chest2Pos.getAttribute("z"));
-					
-					this.chest2Position = new int[] { x, y, z };
+	/**Starts the timeout counter
+	 * @param delay in seconds
+	 */
+	private void startTimeout(int delay) {
+		final Tombstone me = this;
+		lockTimeout = parent.getServer().getScheduler().scheduleSyncDelayedTask(parent, new Runnable() {
+			
+			@Override
+			public void run() {
+				locked = false;
+				if (Settings.FULL_VANISH_TIME > 0) {
+					lockTimeout = parent.getServer().getScheduler().scheduleSyncDelayedTask(parent, new Runnable() {
+						@Override
+						public void run() {
+							lockTimeout = -1;
+							parent.playerPickupTombstone(null, me);
+						}
+					}, Settings.FULL_VANISH_TIME * 20);
+				} else {
+					lockTimeout = -1;
 				}
 			}
-			{				
-				NodeList list = positionsNode.getElementsByTagName("signPos");
-				if (list.getLength() > 0) {
-					Element signPos = (Element) list.item(0);
-					x = Integer.parseInt(signPos.getAttribute("x"));
-					y = Integer.parseInt(signPos.getAttribute("y"));
-					z = Integer.parseInt(signPos.getAttribute("z"));
+		}, delay * 20);
+	}
+	
+	public Tombstone(Element node, long currentTimestamp, DeathChests plugin) throws XMLParseException {
+		try {
+			this.parent = plugin;
+			
+			this.owner = Utils.getPlayer(node.getAttribute("owner"));
+			if (!owner.hasPermission("deathchest.use.noTimeout")) {
+				long existingTime = Long.parseLong(node.getAttribute("existingTime"));
+				this.timestamp = currentTimestamp - existingTime;
+				startTimeout(Settings.TIMEOUT - (int)(existingTime / 1000));
+			}
+			this.locked = Boolean.getBoolean(node.getAttribute("locked"));
+			this.savedXp = Integer.parseInt(node.getAttribute("xp"));
+			this.alreadyDroppedChests = Boolean.getBoolean(node.getAttribute("dropped"));
+			
+			Element positionsNode = (Element) node.getElementsByTagName("positions").item(0);
+			{
+				this.worldName = positionsNode.getAttribute("world");
+				int x, y, z;
+				{
+					Element chestPos = (Element) positionsNode.getElementsByTagName("chestPos").item(0);
+					x = Integer.parseInt(chestPos.getAttribute("x"));
+					y = Integer.parseInt(chestPos.getAttribute("y"));
+					z = Integer.parseInt(chestPos.getAttribute("z"));
 					
-					this.signPosition = new int[] { x, y, z };
+					this.chestPosition = new int[] { x, y, z };
+				}
+				{
+					NodeList list = positionsNode.getElementsByTagName("chest2Pos");
+					if (list.getLength() > 0) {
+						Element chest2Pos = (Element) list.item(0);
+						x = Integer.parseInt(chest2Pos.getAttribute("x"));
+						y = Integer.parseInt(chest2Pos.getAttribute("y"));
+						z = Integer.parseInt(chest2Pos.getAttribute("z"));
+						
+						this.chest2Position = new int[] { x, y, z };
+					}
+				}
+				{				
+					NodeList list = positionsNode.getElementsByTagName("signPos");
+					if (list.getLength() > 0) {
+						Element signPos = (Element) list.item(0);
+						x = Integer.parseInt(signPos.getAttribute("x"));
+						y = Integer.parseInt(signPos.getAttribute("y"));
+						z = Integer.parseInt(signPos.getAttribute("z"));
+						
+						this.signPosition = new int[] { x, y, z };
+					}
 				}
 			}
+			
+			if (owner == null || worldName == null || chestPosition == null)
+				throw new XMLParseException("Important fields are missing! Did you modify this file?");
+		} catch (Exception e) {
+			if (lockTimeout >= 0) {
+				plugin.getServer().getScheduler().cancelTask(lockTimeout);
+			}
+			throw e;
 		}
-		
-		if (owner == null || worldName == null || chestPosition == null)
-			throw new XMLParseException("Important fields are missing! Did you modify this file?");
 	}
 
 	/**Returns the containing World of the DeathChest
@@ -228,19 +274,27 @@ public class Tombstone {
 	/**Checks if the timeout has already ran out
 	 */
 	public boolean isTimedOut() {
-		if (Settings.TIMEOUT == 0)
-			return false;
-//		System.out.println("[DEBUG] timestamp = " + this.timestamp);
-//		System.out.println("[DEBUG] TIMEOUT = " + Settings.TIMEOUT * 1000);
-//		System.out.println("[DEBUG] current = " + System.currentTimeMillis());
-		if (this.timestamp + ((long)(Settings.TIMEOUT * 1000)) < System.currentTimeMillis())
-			return true;
-		return false;
+		return !locked;
+//		if (Settings.TIMEOUT == 0)
+//			return false;
+////		System.out.println("[DEBUG] timestamp = " + this.timestamp);
+////		System.out.println("[DEBUG] TIMEOUT = " + Settings.TIMEOUT * 1000);
+////		System.out.println("[DEBUG] current = " + System.currentTimeMillis());
+//		if (this.timestamp + ((long)(Settings.TIMEOUT * 1000)) < System.currentTimeMillis())
+//			return true;
+//		return false;
 	}
 
+	/**Must be called upon removing a chest. It cancels the delayed task!
+	 */
+	public void remove() {
+		parent.getServer().getScheduler().cancelTask(lockTimeout);
+	}
+	
 	public Node createXmlNode(Element rootNode, Document xmlDoc, long currentTimestamp) {
 		rootNode.setAttribute("owner", this.owner.getName());
 		rootNode.setAttribute("xp", Integer.toString(savedXp));
+		rootNode.setAttribute("locked", Boolean.toString(this.locked));
 
 		Element positions = xmlDoc.createElement("positions");
 		positions.setAttribute("world", worldName);

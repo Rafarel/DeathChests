@@ -45,7 +45,7 @@ public class DeathChestEventListener implements Listener {
 				return;
 			}
 			
-			//TODO: Editable settings for EXP/concurrency loss
+			//TODO: Editable settings for concurrency loss
 			
 			// Only proceed if the player is allowed to drop DeathChests
 			if (!player.hasPermission("deathchest.use")) {
