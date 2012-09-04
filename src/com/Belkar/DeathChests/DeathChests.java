@@ -529,6 +529,7 @@ public class DeathChests extends JavaPlugin {
 		
 		// Completly remove the chest from the Container
 		synchronized (deathChests) {
+			stone.remove();
 			deathChests.remove(stone);
 			getLogger().info("Removed DeathChest of " + stone.getOwnerName() + " at " + stone.getStringLoc());
 		}

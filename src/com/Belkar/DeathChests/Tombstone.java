@@ -56,23 +56,36 @@ public class Tombstone {
 	 * @param delay in seconds
 	 */
 	private void startTimeout(int delay) {
+		if (delay >= 0) {
+//			System.out.println("[DEBUG] Starting timeout timer!");
+			lockTimeout = parent.getServer().getScheduler().scheduleSyncDelayedTask(parent, new Runnable() {
+				@Override
+				public void run() {
+					locked = false;
+					if (Settings.FULL_VANISH_TIME > 0) {
+						startVanishTimer(Settings.FULL_VANISH_TIME);
+					} else {
+						lockTimeout = -1;
+					}
+				}
+			}, delay * 20);
+		} else if (Settings.FULL_VANISH_TIME > 0) {
+			startVanishTimer(Settings.FULL_VANISH_TIME + delay);
+		}
+	}
+	/**Starts the Vanish timer
+	 * @param delay in seconds
+	 */
+	private void startVanishTimer(int delay) {
+		if (delay <= 0)
+			delay = 1;
+//		System.out.println("[DEBUG] Starting vanish timer!");
 		final Tombstone me = this;
 		lockTimeout = parent.getServer().getScheduler().scheduleSyncDelayedTask(parent, new Runnable() {
-			
 			@Override
 			public void run() {
-				locked = false;
-				if (Settings.FULL_VANISH_TIME > 0) {
-					lockTimeout = parent.getServer().getScheduler().scheduleSyncDelayedTask(parent, new Runnable() {
-						@Override
-						public void run() {
-							lockTimeout = -1;
-							parent.playerPickupTombstone(null, me);
-						}
-					}, Settings.FULL_VANISH_TIME * 20);
-				} else {
-					lockTimeout = -1;
-				}
+				lockTimeout = -1;
+				parent.playerPickupTombstone(null, me);
 			}
 		}, delay * 20);
 	}
@@ -85,9 +98,13 @@ public class Tombstone {
 			if (!owner.hasPermission("deathchest.use.noTimeout")) {
 				long existingTime = Long.parseLong(node.getAttribute("existingTime"));
 				this.timestamp = currentTimestamp - existingTime;
-				startTimeout(Settings.TIMEOUT - (int)(existingTime / 1000));
+				int delay = Settings.TIMEOUT - (int)(existingTime / 1000);
+				startTimeout(delay);
+				if (delay <= 0) {
+					locked = false;
+				}
+//				this.locked = Boolean.getBoolean(node.getAttribute("locked"));
 			}
-			this.locked = Boolean.getBoolean(node.getAttribute("locked"));
 			this.savedXp = Integer.parseInt(node.getAttribute("xp"));
 			this.alreadyDroppedChests = Boolean.getBoolean(node.getAttribute("dropped"));
 			
@@ -294,7 +311,7 @@ public class Tombstone {
 	public Node createXmlNode(Element rootNode, Document xmlDoc, long currentTimestamp) {
 		rootNode.setAttribute("owner", this.owner.getName());
 		rootNode.setAttribute("xp", Integer.toString(savedXp));
-		rootNode.setAttribute("locked", Boolean.toString(this.locked));
+//		rootNode.setAttribute("locked", Boolean.toString(this.locked));
 
 		Element positions = xmlDoc.createElement("positions");
 		positions.setAttribute("world", worldName);

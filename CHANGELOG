@@ -26,3 +26,6 @@ Version 1.2.1
 	Fixed database creation on first startup
 	Added Metrics from Hidendra
 	Added "fully vanish function"
+	
+Version 1.2.2
+	Fixed reload after vanish timer started
